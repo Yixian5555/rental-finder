@@ -1,7 +1,11 @@
 import json
 import os
+from pathlib import Path
 
 from anthropic import Anthropic
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
