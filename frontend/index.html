@@ -706,7 +706,7 @@
       const res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [{ role: "user", content: "__START__" }] }),
+        body: JSON.stringify({ messages: [{ role: "user", content: "__START__" }], provider: providerSelect.value }),
       });
 
       if (res.status === 402) {
