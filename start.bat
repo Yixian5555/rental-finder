@@ -9,7 +9,9 @@ echo    Vancouver Rental Finder
 echo  ====================================================
 echo.
 
-:: Load saved keys from .env
+:: Clear any inherited system/user env vars — only load from .env
+set ANTHROPIC_API_KEY=
+set OPENAI_API_KEY=
 if exist ".env" (
   for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
     if "%%a"=="ANTHROPIC_API_KEY" set ANTHROPIC_API_KEY=%%b
