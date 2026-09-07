@@ -394,6 +394,7 @@
     <select id="provider-select" style="font-size:.78rem;padding:4px 8px;border:1.5px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);cursor:pointer;outline:none;">
       <option value="claude">Claude</option>
       <option value="openai">ChatGPT</option>
+      <option value="gemini">Gemini</option>
       <option value="none">No AI</option>
     </select>
   </div>
@@ -653,16 +654,20 @@
     initChat();
   }
 
-  // onRetry: callback invoked when user clicks "Switch and retry"
+  const PROVIDER_LABELS = { claude: "Claude", openai: "ChatGPT", gemini: "Gemini" };
+
   function showSwitchPrompt(failedProvider, onRetry) {
-    const other      = failedProvider === "claude" ? "openai" : "claude";
-    const otherLabel = failedProvider === "claude" ? "ChatGPT" : "Claude";
-    const failedLabel = failedProvider === "claude" ? "Claude" : "ChatGPT";
+    const failedLabel = PROVIDER_LABELS[failedProvider] || failedProvider;
 
-    const otherOpt = providerSelect.querySelector(`option[value="${other}"]`);
-    const canSwitch = otherOpt && !otherOpt.disabled;
+    // Collect all configured alternatives (enabled in select, not the one that failed)
+    const alternatives = Array.from(providerSelect.options)
+      .filter(o => o.value !== "none" && o.value !== failedProvider && !o.disabled)
+      .map(o => ({ value: o.value, label: PROVIDER_LABELS[o.value] || o.value }));
 
-    const btnStyle = "padding:7px 16px;border:none;border-radius:20px;font-size:.82rem;font-weight:600;cursor:pointer;align-self:flex-start;";
+    const btnBase = "padding:7px 16px;border:none;border-radius:20px;font-size:.82rem;font-weight:600;cursor:pointer;align-self:flex-start;";
+    const switchBtns = alternatives.map(p =>
+      `<button class="sw-btn" data-p="${p.value}" style="${btnBase}background:var(--accent);color:#fff;">Switch to ${p.label} and retry</button>`
+    ).join("");
 
     const wrapper = document.createElement("div");
     wrapper.className = "msg bot";
@@ -670,26 +675,26 @@
       <div class="avatar">🏠</div>
       <div class="bubble" style="display:flex;flex-direction:column;gap:10px;max-width:300px;">
         <span>Your <strong>${failedLabel}</strong> credits ran out.</span>
-        ${canSwitch ? `<button id="switch-btn" style="${btnStyle}background:var(--accent);color:#fff;">Switch to ${otherLabel} and retry</button>` : ""}
-        <button id="manual-btn" style="${btnStyle}background:#f3f4f6;color:var(--text);border:1.5px solid var(--border);">Search without AI</button>
-        ${!canSwitch ? `<span style="color:var(--muted);font-size:.78rem;">To add a key later, re-run start.bat.</span>` : ""}
+        ${switchBtns}
+        <button id="manual-btn" style="${btnBase}background:#f3f4f6;color:var(--text);border:1.5px solid var(--border);">Search without AI</button>
+        ${alternatives.length === 0 ? `<span style="color:var(--muted);font-size:.78rem;">Add a free Gemini key via start.bat to keep chatting.</span>` : ""}
       </div>`;
 
     messagesEl.appendChild(wrapper);
     scrollChat();
     setInputEnabled(false);
 
-    if (canSwitch) {
-      document.getElementById("switch-btn").addEventListener("click", () => {
-        providerSelect.value = other;
+    wrapper.querySelectorAll(".sw-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        providerSelect.value = btn.dataset.p;
         wrapper.remove();
         onRetry();
       });
-    }
+    });
 
     document.getElementById("manual-btn").addEventListener("click", () => {
       wrapper.remove();
-      switchToManualMode();  // also sets providerSelect to "none"
+      switchToManualMode();
     });
   }
 

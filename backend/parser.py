@@ -82,9 +82,33 @@ def _chat_openai(messages: list[dict]) -> dict:
     return _extract_filters(response.choices[0].message.content)
 
 
+def _chat_gemini(messages: list[dict]) -> dict:
+    from google import genai
+    from google.genai import types
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set.")
+    client = genai.Client(api_key=api_key)
+    system = SYSTEM_TEMPLATE.format(today=date.today().isoformat())
+
+    contents = []
+    for msg in messages:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append(types.Content(role=role, parts=[types.Part(text=msg["content"])]))
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=contents,
+        config=types.GenerateContentConfig(system_instruction=system, max_output_tokens=1024),
+    )
+    return _extract_filters(response.text)
+
+
 def process_chat(messages: list[dict], provider: str = "claude") -> dict:
     if provider == "openai":
         return _chat_openai(messages)
+    if provider == "gemini":
+        return _chat_gemini(messages)
     return _chat_claude(messages)
 
 
@@ -94,4 +118,6 @@ def available_providers() -> list[str]:
         providers.append("claude")
     if os.environ.get("OPENAI_API_KEY"):
         providers.append("openai")
+    if os.environ.get("GEMINI_API_KEY"):
+        providers.append("gemini")
     return providers

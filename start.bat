@@ -12,27 +12,32 @@ echo.
 :: Clear any inherited system/user env vars — only load from .env
 set ANTHROPIC_API_KEY=
 set OPENAI_API_KEY=
+set GEMINI_API_KEY=
 if exist ".env" (
   for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
     if "%%a"=="ANTHROPIC_API_KEY" set ANTHROPIC_API_KEY=%%b
     if "%%a"=="OPENAI_API_KEY"    set OPENAI_API_KEY=%%b
+    if "%%a"=="GEMINI_API_KEY"    set GEMINI_API_KEY=%%b
   )
 )
 
 :: Always ask which AI to use
 set "CLAUDE_STATUS="
 set "OPENAI_STATUS="
+set "GEMINI_STATUS="
 if not "!ANTHROPIC_API_KEY!"=="" set "CLAUDE_STATUS= [key saved]"
 if not "!OPENAI_API_KEY!"==""    set "OPENAI_STATUS= [key saved]"
+if not "!GEMINI_API_KEY!"==""    set "GEMINI_STATUS= [key saved]"
 
 echo  Which AI do you want to use today?
 echo.
 echo    1  Claude  (Anthropic)!CLAUDE_STATUS!
 echo    2  ChatGPT (OpenAI)!OPENAI_STATUS!
-echo    3  No AI   (search manually with filters)
+echo    3  Gemini  (Google - free tier available)!GEMINI_STATUS!
+echo    4  No AI   (search manually with filters)
 echo    Q  Quit
 echo.
-set /p AI_CHOICE="  Enter 1, 2 or 3: "
+set /p AI_CHOICE="  Enter 1, 2, 3 or 4: "
 echo.
 
 if /i "!AI_CHOICE!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
@@ -48,6 +53,11 @@ if "!AI_CHOICE!"=="2" (
   set CHOSEN_KEY=!OPENAI_API_KEY!
 )
 if "!AI_CHOICE!"=="3" (
+  set CHOSEN_PROVIDER=gemini
+  set CHOSEN_LABEL=Gemini
+  set CHOSEN_KEY=!GEMINI_API_KEY!
+)
+if "!AI_CHOICE!"=="4" (
   set CHOSEN_PROVIDER=none
   set CHOSEN_LABEL=No AI
   set CHOSEN_KEY=skip
@@ -86,7 +96,6 @@ if "!CHOSEN_PROVIDER!"=="claude" (
   echo.
   echo  The key looks like:  sk-ant-api03-XXXXXXXX...
   echo.
-  set KEY_PREFIX=sk-ant
 )
 if "!CHOSEN_PROVIDER!"=="openai" (
   echo  1. Go to: https://platform.openai.com/api-keys
@@ -95,7 +104,16 @@ if "!CHOSEN_PROVIDER!"=="openai" (
   echo.
   echo  The key looks like:  sk-proj-XXXXXXXX... or sk-XXXXXXXX...
   echo.
-  set KEY_PREFIX=sk-
+)
+if "!CHOSEN_PROVIDER!"=="gemini" (
+  echo  Gemini has a FREE tier - no credit card needed!
+  echo.
+  echo  1. Go to: https://aistudio.google.com/app/apikey
+  echo  2. Sign in with your Google account
+  echo  3. Click "Create API key", then copy it
+  echo.
+  echo  The key looks like:  AIzaSyXXXXXXXXXXXXXXXXXX...
+  echo.
 )
 
 echo  Press S to skip (the chat won't work without a key)
@@ -107,13 +125,6 @@ echo.
 if /i "!USER_KEY!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
 if /i "!USER_KEY!"=="S" ( echo  Skipping key setup. & goto :install_deps )
 if "!USER_KEY!"==""       ( echo  Nothing entered - skipping. & goto :install_deps )
-
-echo !USER_KEY! | findstr /i "sk-" > nul
-if errorlevel 1 (
-  echo  [!] That doesn't look like a valid API key.
-  echo      Skipping for now - re-run start.bat to try again.
-  goto :install_deps
-)
 
 if "!CHOSEN_PROVIDER!"=="claude" (
   set ANTHROPIC_API_KEY=!USER_KEY!
@@ -133,6 +144,16 @@ if "!CHOSEN_PROVIDER!"=="openai" (
     move /y .env.tmp .env > nul
   ) else (
     echo OPENAI_API_KEY=!USER_KEY!> .env
+  )
+)
+if "!CHOSEN_PROVIDER!"=="gemini" (
+  set GEMINI_API_KEY=!USER_KEY!
+  if exist ".env" (
+    findstr /v /i "^GEMINI_API_KEY=" .env > .env.tmp
+    echo GEMINI_API_KEY=!USER_KEY!>> .env.tmp
+    move /y .env.tmp .env > nul
+  ) else (
+    echo GEMINI_API_KEY=!USER_KEY!> .env
   )
 )
 echo  Key saved. You won't need to enter it again.
