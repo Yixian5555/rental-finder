@@ -600,7 +600,8 @@
   }
 
   // ── API calls ─────────────────────────────────────────────
-  function showSwitchPrompt(userText, failedProvider) {
+  // onRetry: callback invoked when user clicks "Switch and retry"
+  function showSwitchPrompt(failedProvider, onRetry) {
     const other      = failedProvider === "claude" ? "openai" : "claude";
     const otherLabel = failedProvider === "claude" ? "ChatGPT" : "Claude";
     const failedLabel = failedProvider === "claude" ? "Claude" : "ChatGPT";
@@ -622,14 +623,13 @@
 
     messagesEl.appendChild(wrapper);
     scrollChat();
-    setInputEnabled(true);
+    setInputEnabled(!canSwitch);
 
     if (canSwitch) {
       document.getElementById("switch-btn").addEventListener("click", () => {
         providerSelect.value = other;
         wrapper.remove();
-        addMessage("user", userText);
-        sendToChat(userText);
+        onRetry();
       });
     }
   }
@@ -650,7 +650,10 @@
         const data = await res.json();
         removeTyping();
         history.pop();
-        showSwitchPrompt(userText, data.provider);
+        showSwitchPrompt(data.provider, () => {
+          addMessage("user", userText);
+          sendToChat(userText);
+        });
         return;
       }
 
@@ -705,6 +708,15 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: [{ role: "user", content: "__START__" }] }),
       });
+
+      if (res.status === 402) {
+        const data = await res.json();
+        removeTyping();
+        // history stays empty — clicking retry re-runs initChat cleanly
+        showSwitchPrompt(data.provider, () => initChat());
+        return;
+      }
+
       const data = await res.json();
       removeTyping();
       addMessage("bot", data.message);
@@ -713,9 +725,10 @@
       setInputEnabled(true);
     } catch {
       removeTyping();
-      addMessage("bot", "Hi! I'll help you find rental units in Vancouver. What area(s) are you considering, and what's your budget?");
+      const fallback = "Hi! I'll help you find rental units in Vancouver. What area(s) are you considering, and what's your budget?";
+      addMessage("bot", fallback);
       history.push({ role: "user", content: "__START__" });
-      history.push({ role: "assistant", content: "Hi! I'll help you find rental units in Vancouver. What area(s) are you considering, and what's your budget?" });
+      history.push({ role: "assistant", content: fallback });
       setInputEnabled(true);
     }
   }
