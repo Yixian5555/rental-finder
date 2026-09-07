@@ -1,6 +1,7 @@
 import asyncio
 import os
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
@@ -24,6 +25,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[Message]
+    provider: Optional[str] = None  # "claude" or "openai"; auto-detects if omitted
 
 
 class SearchRequest(BaseModel):
@@ -35,9 +37,21 @@ def serve_frontend():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+@app.get("/providers")
+def get_providers():
+    providers = _parser.available_providers()
+    return {"providers": providers, "default": providers[0] if providers else None}
+
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    result = await asyncio.to_thread(_parser.process_chat, [m.model_dump() for m in req.messages])
+    providers = _parser.available_providers()
+    provider = req.provider or (providers[0] if providers else "claude")
+    result = await asyncio.to_thread(
+        _parser.process_chat,
+        [m.model_dump() for m in req.messages],
+        provider,
+    )
     return result
 
 

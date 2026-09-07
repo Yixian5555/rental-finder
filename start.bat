@@ -9,127 +9,150 @@ echo    Vancouver Rental Finder
 echo  ====================================================
 echo.
 
-:: ─── Load saved API key from .env ───────────────────────
+:: Load saved keys from .env
 if exist ".env" (
   for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
     if "%%a"=="ANTHROPIC_API_KEY" set ANTHROPIC_API_KEY=%%b
+    if "%%a"=="OPENAI_API_KEY"    set OPENAI_API_KEY=%%b
   )
 )
 
-:: ─── Skip wizard if key is already set ──────────────────
-if not "!ANTHROPIC_API_KEY!"=="" (
-  echo  API key found. Starting the app...
-  echo.
-  goto :install_deps
-)
+:: Skip wizard if at least one key is already set
+if not "!ANTHROPIC_API_KEY!"=="" goto :install_deps
+if not "!OPENAI_API_KEY!"==""    goto :install_deps
 
-:: ─── First-time setup wizard ────────────────────────────
+:: ─── First-time setup wizard ─────────────────────────
 cls
 echo.
 echo  ====================================================
 echo    Welcome! Let's get you set up.
 echo  ====================================================
 echo.
-echo  This app uses Claude AI to understand what you're
-echo  looking for in a rental. It needs an API key to
-echo  work — here's how to get one for free:
+echo  This app uses an AI to understand what you're
+echo  looking for in a rental. You can use Claude (by
+echo  Anthropic) or ChatGPT (by OpenAI) - or both.
 echo.
-echo  STEP 1.  Open this link in your browser:
+echo  Which AI would you like to set up?
 echo.
-echo           https://console.anthropic.com
+echo    1  Claude  (https://console.anthropic.com)
+echo    2  ChatGPT (https://platform.openai.com/api-keys)
+echo    3  Both
+echo    S  Skip for now
+echo    Q  Quit
 echo.
-echo  STEP 2.  Create a free account (or sign in).
-echo.
-echo  STEP 3.  In the left menu, click  "API Keys".
-echo.
-echo  STEP 4.  Click "Create Key", give it any name,
-echo           then click "Copy" to copy the key.
-echo.
-echo  STEP 5.  Come back here and paste it below.
-echo.
-echo  ─────────────────────────────────────────────────────
-echo   The key looks like:  sk-ant-api03-XXXXXXXX...
-echo  ─────────────────────────────────────────────────────
-echo.
-echo   Press  S  to skip for now (the chat won't work)
-echo   Press  Q  to quit
-echo.
-set /p USER_INPUT="  Paste your API key and press Enter: "
+set /p PROVIDER_CHOICE="  Enter 1, 2, 3, S or Q: "
 echo.
 
-:: Handle non-key inputs
-if /i "!USER_INPUT!"=="Q" (
-  echo  Goodbye!
-  timeout /t 2 /nobreak > nul
-  exit /b 0
-)
-if /i "!USER_INPUT!"=="S" (
-  echo  Skipping API key setup.
-  echo  You can add it later: create a file called  .env
-  echo  in this folder and add the line:
-  echo    ANTHROPIC_API_KEY=your-key-here
-  echo.
-  goto :install_deps
-)
-if "!USER_INPUT!"=="" (
-  echo  Nothing entered — skipping for now.
-  echo.
-  goto :install_deps
-)
+if /i "!PROVIDER_CHOICE!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
+if /i "!PROVIDER_CHOICE!"=="S" goto :install_deps
 
-:: Basic check — key should start with sk-ant
-echo !USER_INPUT! | findstr /i "sk-ant" > nul
+if "!PROVIDER_CHOICE!"=="1" goto :setup_claude
+if "!PROVIDER_CHOICE!"=="3" goto :setup_claude
+if "!PROVIDER_CHOICE!"=="2" goto :setup_openai
+
+echo  Invalid choice. Skipping setup.
+goto :install_deps
+
+:: ─── Claude key wizard ───────────────────────────────
+:setup_claude
+echo  ---------------------------------------------------
+echo   Setting up Claude
+echo  ---------------------------------------------------
+echo.
+echo  1. Go to: https://console.anthropic.com
+echo  2. Sign in and click "API Keys" in the left menu
+echo  3. Click "Create Key", then copy it
+echo.
+echo  The key looks like:  sk-ant-api03-XXXXXXXX...
+echo.
+echo  Press S to skip Claude and continue
+echo.
+set /p CLAUDE_KEY="  Paste your Claude API key: "
+echo.
+
+if /i "!CLAUDE_KEY!"=="S" goto :after_claude
+
+echo !CLAUDE_KEY! | findstr /i "sk-ant" > nul
 if errorlevel 1 (
-  echo  ─────────────────────────────────────────────────────
-  echo   [!] That doesn't look like a valid API key.
-  echo       Keys start with  sk-ant-...
-  echo.
-  echo       Please close this window, re-open start.bat,
-  echo       and try pasting the key again.
-  echo  ─────────────────────────────────────────────────────
-  echo.
-  pause
-  exit /b 1
+  echo  [!] That doesn't look like a Claude key (should start with sk-ant-...)
+  echo      Skipping Claude setup.
+  goto :after_claude
 )
 
-:: Save key to .env for next time (preserve any existing vars, update or add the key)
-set ANTHROPIC_API_KEY=!USER_INPUT!
+set ANTHROPIC_API_KEY=!CLAUDE_KEY!
 if exist ".env" (
   findstr /v /i "^ANTHROPIC_API_KEY=" .env > .env.tmp
-  echo ANTHROPIC_API_KEY=!USER_INPUT!>> .env.tmp
+  echo ANTHROPIC_API_KEY=!CLAUDE_KEY!>> .env.tmp
   move /y .env.tmp .env > nul
 ) else (
-  echo ANTHROPIC_API_KEY=!USER_INPUT!> .env
+  echo ANTHROPIC_API_KEY=!CLAUDE_KEY!> .env
 )
-echo  Your key has been saved. You won't need to enter
-echo  it again next time you open the app.
+echo  Claude key saved.
 echo.
 
-:: ─── Install Python dependencies ────────────────────────
+:after_claude
+if not "!PROVIDER_CHOICE!"=="3" goto :install_deps
+
+:: ─── OpenAI key wizard ───────────────────────────────
+:setup_openai
+echo  ---------------------------------------------------
+echo   Setting up ChatGPT (OpenAI)
+echo  ---------------------------------------------------
+echo.
+echo  1. Go to: https://platform.openai.com/api-keys
+echo  2. Sign in and click "Create new secret key"
+echo  3. Copy the key
+echo.
+echo  The key looks like:  sk-proj-XXXXXXXX... or sk-XXXXXXXX...
+echo.
+echo  Press S to skip ChatGPT and continue
+echo.
+set /p OPENAI_KEY="  Paste your OpenAI API key: "
+echo.
+
+if /i "!OPENAI_KEY!"=="S" goto :install_deps
+
+echo !OPENAI_KEY! | findstr /i "^sk-" > nul
+if errorlevel 1 (
+  echo  [!] That doesn't look like an OpenAI key (should start with sk-...)
+  echo      Skipping ChatGPT setup.
+  goto :install_deps
+)
+
+set OPENAI_API_KEY=!OPENAI_KEY!
+if exist ".env" (
+  findstr /v /i "^OPENAI_API_KEY=" .env > .env.tmp
+  echo OPENAI_API_KEY=!OPENAI_KEY!>> .env.tmp
+  move /y .env.tmp .env > nul
+) else (
+  echo OPENAI_API_KEY=!OPENAI_KEY!> .env
+)
+echo  ChatGPT key saved.
+echo.
+
+:: ─── Install Python dependencies ─────────────────────
 :install_deps
 
-:: Check Python is available
 python --version > nul 2>&1
 if errorlevel 1 (
-  echo  ─────────────────────────────────────────────────────
-  echo   [ERROR] Python not found on PATH.
+  echo  ---------------------------------------------------
+  echo   [ERROR] Python not found.
   echo   Install Python 3.10+ from https://python.org
-  echo   and make sure to tick "Add Python to PATH".
-  echo  ─────────────────────────────────────────────────────
-  echo.
+  echo   and tick "Add Python to PATH".
+  echo  ---------------------------------------------------
   pause
   exit /b 1
 )
+
 if not exist "venv" (
-  echo  ─────────────────────────────────────────────────────
+  echo  ---------------------------------------------------
   echo   Setting things up for the first time...
-  echo   (This takes about 30 seconds — only happens once)
-  echo  ─────────────────────────────────────────────────────
+  echo   (This takes about 30 seconds - only happens once)
+  echo  ---------------------------------------------------
   echo.
   python -m venv venv
   if errorlevel 1 (
     echo  [ERROR] Failed to create virtual environment.
-    echo   Check your Python installation and available disk space.
     pause
     exit /b 1
   )
@@ -139,11 +162,10 @@ call venv\Scripts\activate.bat
 pip install -r requirements.txt -q
 if errorlevel 1 (
   echo  [WARNING] Some packages may not have installed correctly.
-  echo   Check the output above for details.
   echo.
 )
 
-:: ─── Start the app ───────────────────────────────────────
+:: ─── Start the app ────────────────────────────────────
 cls
 echo.
 echo  ====================================================
@@ -159,7 +181,6 @@ echo  To stop the app, press  Ctrl + C  in this window.
 echo  ====================================================
 echo.
 
-:: Open browser automatically after a short delay
 start /b cmd /c "timeout /t 3 /nobreak > nul && start http://localhost:8000"
 
 cd backend

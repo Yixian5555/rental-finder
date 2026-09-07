@@ -389,6 +389,13 @@
     <h1>Vancouver Rental Finder</h1>
     <div class="subtitle">Tell me what you're looking for and I'll search for you</div>
   </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <label for="provider-select" style="font-size:.78rem;color:var(--muted);white-space:nowrap;">AI:</label>
+    <select id="provider-select" style="font-size:.78rem;padding:4px 8px;border:1.5px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);cursor:pointer;outline:none;">
+      <option value="claude">Claude</option>
+      <option value="openai">ChatGPT</option>
+    </select>
+  </div>
 </header>
 
 <main>
@@ -417,11 +424,12 @@
 </main>
 
 <script>
-  const messagesEl = document.getElementById("messages");
-  const input      = document.getElementById("user-input");
-  const sendBtn    = document.getElementById("send-btn");
-  const resultsScroll = document.getElementById("results-scroll");
-  const countBadge = document.getElementById("count-badge");
+  const messagesEl      = document.getElementById("messages");
+  const input           = document.getElementById("user-input");
+  const sendBtn         = document.getElementById("send-btn");
+  const resultsScroll   = document.getElementById("results-scroll");
+  const countBadge      = document.getElementById("count-badge");
+  const providerSelect  = document.getElementById("provider-select");
 
   let history = [];   // [{role, content}]
   let searching = false;
@@ -601,7 +609,7 @@
       const res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, provider: providerSelect.value }),
       });
       const data = await res.json();
       removeTyping();
@@ -683,7 +691,20 @@
   input.addEventListener("keydown", e => { if (e.key === "Enter") handleSend(); });
 
   // ── Boot ─────────────────────────────────────────────────
-  initChat();
+  (async () => {
+    try {
+      const res = await fetch("/providers");
+      const { providers, default: def } = await res.json();
+      for (const opt of providerSelect.options) {
+        if (!providers.includes(opt.value)) {
+          opt.disabled = true;
+          opt.text += " (no key)";
+        }
+      }
+      if (def) providerSelect.value = def;
+    } catch {}
+    initChat();
+  })();
 </script>
 </body>
 </html>
