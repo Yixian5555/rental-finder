@@ -31,9 +31,9 @@ if not "!GEMINI_API_KEY!"==""    set "GEMINI_STATUS= [key saved]"
 
 echo  Which AI do you want to use today?
 echo.
-echo    1  Claude  (Anthropic)!CLAUDE_STATUS!
-echo    2  ChatGPT (OpenAI)!OPENAI_STATUS!
-echo    3  Gemini  (Google - free tier available)!GEMINI_STATUS!
+echo    1  Claude  (Anthropic - recommended, no free tier)!CLAUDE_STATUS!
+echo    2  ChatGPT (OpenAI - no free tier)!OPENAI_STATUS!
+echo    3  Gemini  (Google - FREE tier available)!GEMINI_STATUS!
 echo    4  No AI   (search manually with filters)
 echo    Q  Quit
 echo.
