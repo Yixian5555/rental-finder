@@ -27,9 +27,10 @@ echo  Which AI do you want to use today?
 echo.
 echo    1  Claude  (Anthropic)!CLAUDE_STATUS!
 echo    2  ChatGPT (OpenAI)!OPENAI_STATUS!
+echo    3  No AI   (search manually with filters)
 echo    Q  Quit
 echo.
-set /p AI_CHOICE="  Enter 1 or 2: "
+set /p AI_CHOICE="  Enter 1, 2 or 3: "
 echo.
 
 if /i "!AI_CHOICE!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
@@ -44,11 +45,15 @@ if "!AI_CHOICE!"=="2" (
   set CHOSEN_LABEL=ChatGPT
   set CHOSEN_KEY=!OPENAI_API_KEY!
 )
+if "!AI_CHOICE!"=="3" (
+  set CHOSEN_PROVIDER=none
+  set CHOSEN_LABEL=No AI
+  set CHOSEN_KEY=skip
+)
 if "!CHOSEN_PROVIDER!"=="" (
-  echo  Invalid choice - defaulting to Claude.
-  set CHOSEN_PROVIDER=claude
-  set CHOSEN_LABEL=Claude
-  set CHOSEN_KEY=!ANTHROPIC_API_KEY!
+  echo  Invalid choice - please re-run start.bat.
+  pause
+  exit /b 1
 )
 
 :: Save the chosen provider as the default
@@ -171,7 +176,7 @@ cls
 echo.
 echo  ====================================================
 echo    Vancouver Rental Finder is ready!
-echo    Using: !CHOSEN_LABEL!
+echo    Mode: !CHOSEN_LABEL!
 echo  ====================================================
 echo.
 echo  Opening your browser in 3 seconds...

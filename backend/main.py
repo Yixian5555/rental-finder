@@ -41,7 +41,12 @@ def serve_frontend():
 def get_providers():
     providers = _parser.available_providers()
     default_prov = os.environ.get("DEFAULT_PROVIDER")
-    default = default_prov if (default_prov and default_prov in providers) else (providers[0] if providers else None)
+    if default_prov == "none":
+        default = "none"
+    elif default_prov and default_prov in providers:
+        default = default_prov
+    else:
+        default = providers[0] if providers else None
     return {"providers": providers, "default": default}
 
 
