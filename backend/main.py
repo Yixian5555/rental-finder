@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -40,19 +40,27 @@ def serve_frontend():
 @app.get("/providers")
 def get_providers():
     providers = _parser.available_providers()
-    return {"providers": providers, "default": providers[0] if providers else None}
+    default_prov = os.environ.get("DEFAULT_PROVIDER")
+    default = default_prov if (default_prov and default_prov in providers) else (providers[0] if providers else None)
+    return {"providers": providers, "default": default}
 
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
     providers = _parser.available_providers()
-    provider = req.provider or (providers[0] if providers else "claude")
-    result = await asyncio.to_thread(
-        _parser.process_chat,
-        [m.model_dump() for m in req.messages],
-        provider,
-    )
-    return result
+    provider = req.provider or os.environ.get("DEFAULT_PROVIDER") or (providers[0] if providers else "claude")
+    try:
+        result = await asyncio.to_thread(
+            _parser.process_chat,
+            [m.model_dump() for m in req.messages],
+            provider,
+        )
+        return result
+    except Exception as e:
+        err = str(e)
+        if "credit balance is too low" in err or "insufficient_quota" in err or "billing" in err.lower():
+            return JSONResponse(status_code=402, content={"error": "low_credits", "provider": provider})
+        raise
 
 
 @app.post("/search")

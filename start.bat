@@ -17,117 +17,121 @@ if exist ".env" (
   )
 )
 
-:: Skip wizard if at least one key is already set
-if not "!ANTHROPIC_API_KEY!"=="" goto :install_deps
-if not "!OPENAI_API_KEY!"==""    goto :install_deps
+:: Always ask which AI to use
+echo  Which AI do you want to use today?
+echo.
+if not "!ANTHROPIC_API_KEY!"=="" (
+  echo    1  Claude  (Anthropic)  [key saved]
+) else (
+  echo    1  Claude  (Anthropic)
+)
+if not "!OPENAI_API_KEY!"=="" (
+  echo    2  ChatGPT (OpenAI)     [key saved]
+) else (
+  echo    2  ChatGPT (OpenAI)
+)
+echo    Q  Quit
+echo.
+set /p AI_CHOICE="  Enter 1 or 2: "
+echo.
 
-:: ─── First-time setup wizard ─────────────────────────
+if /i "!AI_CHOICE!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
+
+if "!AI_CHOICE!"=="1" (
+  set CHOSEN_PROVIDER=claude
+  set CHOSEN_LABEL=Claude
+  set CHOSEN_KEY=!ANTHROPIC_API_KEY!
+)
+if "!AI_CHOICE!"=="2" (
+  set CHOSEN_PROVIDER=openai
+  set CHOSEN_LABEL=ChatGPT
+  set CHOSEN_KEY=!OPENAI_API_KEY!
+)
+if "!CHOSEN_PROVIDER!"=="" (
+  echo  Invalid choice - defaulting to Claude.
+  set CHOSEN_PROVIDER=claude
+  set CHOSEN_LABEL=Claude
+  set CHOSEN_KEY=!ANTHROPIC_API_KEY!
+)
+
+:: Save the chosen provider as the default
+if exist ".env" (
+  findstr /v /i "^DEFAULT_PROVIDER=" .env > .env.tmp
+  echo DEFAULT_PROVIDER=!CHOSEN_PROVIDER!>> .env.tmp
+  move /y .env.tmp .env > nul
+) else (
+  echo DEFAULT_PROVIDER=!CHOSEN_PROVIDER!> .env
+)
+set DEFAULT_PROVIDER=!CHOSEN_PROVIDER!
+
+:: Run key wizard if the chosen key is not saved
+if not "!CHOSEN_KEY!"=="" goto :install_deps
+
+:: ─── Key wizard ──────────────────────────────────────
 cls
 echo.
 echo  ====================================================
-echo    Welcome! Let's get you set up.
+echo    !CHOSEN_LABEL! API Key Setup
 echo  ====================================================
 echo.
-echo  This app uses an AI to understand what you're
-echo  looking for in a rental. You can use Claude (by
-echo  Anthropic) or ChatGPT (by OpenAI) - or both.
-echo.
-echo  Which AI would you like to set up?
-echo.
-echo    1  Claude  (https://console.anthropic.com)
-echo    2  ChatGPT (https://platform.openai.com/api-keys)
-echo    3  Both
-echo    S  Skip for now
-echo    Q  Quit
-echo.
-set /p PROVIDER_CHOICE="  Enter 1, 2, 3, S or Q: "
-echo.
 
-if /i "!PROVIDER_CHOICE!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
-if /i "!PROVIDER_CHOICE!"=="S" goto :install_deps
-
-if "!PROVIDER_CHOICE!"=="1" goto :setup_claude
-if "!PROVIDER_CHOICE!"=="3" goto :setup_claude
-if "!PROVIDER_CHOICE!"=="2" goto :setup_openai
-
-echo  Invalid choice. Skipping setup.
-goto :install_deps
-
-:: ─── Claude key wizard ───────────────────────────────
-:setup_claude
-echo  ---------------------------------------------------
-echo   Setting up Claude
-echo  ---------------------------------------------------
-echo.
-echo  1. Go to: https://console.anthropic.com
-echo  2. Sign in and click "API Keys" in the left menu
-echo  3. Click "Create Key", then copy it
-echo.
-echo  The key looks like:  sk-ant-api03-XXXXXXXX...
-echo.
-echo  Press S to skip Claude and continue
-echo.
-set /p CLAUDE_KEY="  Paste your Claude API key: "
-echo.
-
-if /i "!CLAUDE_KEY!"=="S" goto :after_claude
-
-echo !CLAUDE_KEY! | findstr /i "sk-ant" > nul
-if errorlevel 1 (
-  echo  [!] That doesn't look like a Claude key (should start with sk-ant-...)
-  echo      Skipping Claude setup.
-  goto :after_claude
+if "!CHOSEN_PROVIDER!"=="claude" (
+  echo  1. Go to: https://console.anthropic.com
+  echo  2. Sign in and click "API Keys" in the left menu
+  echo  3. Click "Create Key", then copy it
+  echo.
+  echo  The key looks like:  sk-ant-api03-XXXXXXXX...
+  echo.
+  set KEY_PREFIX=sk-ant
+)
+if "!CHOSEN_PROVIDER!"=="openai" (
+  echo  1. Go to: https://platform.openai.com/api-keys
+  echo  2. Sign in and click "Create new secret key"
+  echo  3. Copy the key
+  echo.
+  echo  The key looks like:  sk-proj-XXXXXXXX... or sk-XXXXXXXX...
+  echo.
+  set KEY_PREFIX=sk-
 )
 
-set ANTHROPIC_API_KEY=!CLAUDE_KEY!
-if exist ".env" (
-  findstr /v /i "^ANTHROPIC_API_KEY=" .env > .env.tmp
-  echo ANTHROPIC_API_KEY=!CLAUDE_KEY!>> .env.tmp
-  move /y .env.tmp .env > nul
-) else (
-  echo ANTHROPIC_API_KEY=!CLAUDE_KEY!> .env
-)
-echo  Claude key saved.
+echo  Press S to skip (the chat won't work without a key)
+echo  Press Q to quit
+echo.
+set /p USER_KEY="  Paste your !CHOSEN_LABEL! API key: "
 echo.
 
-:after_claude
-if not "!PROVIDER_CHOICE!"=="3" goto :install_deps
+if /i "!USER_KEY!"=="Q" ( echo  Goodbye! & timeout /t 2 /nobreak > nul & exit /b 0 )
+if /i "!USER_KEY!"=="S" ( echo  Skipping key setup. & goto :install_deps )
+if "!USER_KEY!"==""       ( echo  Nothing entered - skipping. & goto :install_deps )
 
-:: ─── OpenAI key wizard ───────────────────────────────
-:setup_openai
-echo  ---------------------------------------------------
-echo   Setting up ChatGPT (OpenAI)
-echo  ---------------------------------------------------
-echo.
-echo  1. Go to: https://platform.openai.com/api-keys
-echo  2. Sign in and click "Create new secret key"
-echo  3. Copy the key
-echo.
-echo  The key looks like:  sk-proj-XXXXXXXX... or sk-XXXXXXXX...
-echo.
-echo  Press S to skip ChatGPT and continue
-echo.
-set /p OPENAI_KEY="  Paste your OpenAI API key: "
-echo.
-
-if /i "!OPENAI_KEY!"=="S" goto :install_deps
-
-echo !OPENAI_KEY! | findstr /i "^sk-" > nul
+echo !USER_KEY! | findstr /i "sk-" > nul
 if errorlevel 1 (
-  echo  [!] That doesn't look like an OpenAI key (should start with sk-...)
-  echo      Skipping ChatGPT setup.
+  echo  [!] That doesn't look like a valid API key.
+  echo      Skipping for now - re-run start.bat to try again.
   goto :install_deps
 )
 
-set OPENAI_API_KEY=!OPENAI_KEY!
-if exist ".env" (
-  findstr /v /i "^OPENAI_API_KEY=" .env > .env.tmp
-  echo OPENAI_API_KEY=!OPENAI_KEY!>> .env.tmp
-  move /y .env.tmp .env > nul
-) else (
-  echo OPENAI_API_KEY=!OPENAI_KEY!> .env
+if "!CHOSEN_PROVIDER!"=="claude" (
+  set ANTHROPIC_API_KEY=!USER_KEY!
+  if exist ".env" (
+    findstr /v /i "^ANTHROPIC_API_KEY=" .env > .env.tmp
+    echo ANTHROPIC_API_KEY=!USER_KEY!>> .env.tmp
+    move /y .env.tmp .env > nul
+  ) else (
+    echo ANTHROPIC_API_KEY=!USER_KEY!> .env
+  )
 )
-echo  ChatGPT key saved.
+if "!CHOSEN_PROVIDER!"=="openai" (
+  set OPENAI_API_KEY=!USER_KEY!
+  if exist ".env" (
+    findstr /v /i "^OPENAI_API_KEY=" .env > .env.tmp
+    echo OPENAI_API_KEY=!USER_KEY!>> .env.tmp
+    move /y .env.tmp .env > nul
+  ) else (
+    echo OPENAI_API_KEY=!USER_KEY!> .env
+  )
+)
+echo  Key saved. You won't need to enter it again.
 echo.
 
 :: ─── Install Python dependencies ─────────────────────
@@ -170,6 +174,7 @@ cls
 echo.
 echo  ====================================================
 echo    Vancouver Rental Finder is ready!
+echo    Using: !CHOSEN_LABEL!
 echo  ====================================================
 echo.
 echo  Opening your browser in 3 seconds...
