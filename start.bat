@@ -18,18 +18,15 @@ if exist ".env" (
 )
 
 :: Always ask which AI to use
+set "CLAUDE_STATUS="
+set "OPENAI_STATUS="
+if not "!ANTHROPIC_API_KEY!"=="" set "CLAUDE_STATUS= [key saved]"
+if not "!OPENAI_API_KEY!"==""    set "OPENAI_STATUS= [key saved]"
+
 echo  Which AI do you want to use today?
 echo.
-if not "!ANTHROPIC_API_KEY!"=="" (
-  echo    1  Claude  (Anthropic)  [key saved]
-) else (
-  echo    1  Claude  (Anthropic)
-)
-if not "!OPENAI_API_KEY!"=="" (
-  echo    2  ChatGPT (OpenAI)     [key saved]
-) else (
-  echo    2  ChatGPT (OpenAI)
-)
+echo    1  Claude  (Anthropic)!CLAUDE_STATUS!
+echo    2  ChatGPT (OpenAI)!OPENAI_STATUS!
 echo    Q  Quit
 echo.
 set /p AI_CHOICE="  Enter 1 or 2: "
