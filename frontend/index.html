@@ -600,57 +600,38 @@
   }
 
   // ── API calls ─────────────────────────────────────────────
-  function showLowCreditsPrompt(failedProvider) {
-    removeTyping();
-    history.pop();
-
-    const other = failedProvider === "claude" ? "openai" : "claude";
+  function showSwitchPrompt(userText, failedProvider) {
+    const other      = failedProvider === "claude" ? "openai" : "claude";
     const otherLabel = failedProvider === "claude" ? "ChatGPT" : "Claude";
     const failedLabel = failedProvider === "claude" ? "Claude" : "ChatGPT";
 
-    const msg = document.createElement("div");
-    msg.className = "msg bot";
-    const avatar = document.createElement("div");
-    avatar.className = "avatar";
-    avatar.textContent = "🏠";
-    const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.style.display = "flex";
-    bubble.style.flexDirection = "column";
-    bubble.style.gap = "10px";
-
     const otherOpt = providerSelect.querySelector(`option[value="${other}"]`);
-    const otherAvailable = otherOpt && !otherOpt.disabled;
+    const canSwitch = otherOpt && !otherOpt.disabled;
 
-    if (otherAvailable) {
-      bubble.innerHTML = `
-        <span>Your <strong>${failedLabel}</strong> credit balance is too low. Switch to <strong>${otherLabel}</strong> to continue?</span>
-        <button id="switch-provider-btn" style="padding:7px 14px;background:var(--accent);color:#fff;border:none;border-radius:20px;font-size:.8rem;font-weight:600;cursor:pointer;">Switch to ${otherLabel}</button>`;
-    } else {
-      bubble.innerHTML = `<span>Your <strong>${failedLabel}</strong> credit balance is too low. Please top up your account or add a different API key.</span>`;
-    }
-
-    msg.appendChild(avatar);
-    msg.appendChild(bubble);
-    messagesEl.appendChild(msg);
-    scrollChat();
-
-    if (otherAvailable) {
-      document.getElementById("switch-provider-btn").addEventListener("click", () => {
-        providerSelect.value = other;
-        msg.remove();
-        const lastUserMsg = history.filter(m => m.role === "user").slice(-1)[0];
-        if (lastUserMsg) {
-          addMessage("user", lastUserMsg.content);
-          sendToChat(lastUserMsg.content);
-          history.pop();
-        } else {
-          setInputEnabled(true);
+    const wrapper = document.createElement("div");
+    wrapper.className = "msg bot";
+    wrapper.innerHTML = `
+      <div class="avatar">🏠</div>
+      <div class="bubble" style="display:flex;flex-direction:column;gap:10px;max-width:300px;">
+        <span>Your <strong>${failedLabel}</strong> credits ran out.</span>
+        ${canSwitch
+          ? `<button id="switch-btn" style="padding:7px 16px;background:var(--accent);color:#fff;border:none;border-radius:20px;font-size:.82rem;font-weight:600;cursor:pointer;align-self:flex-start;">Switch to ${otherLabel} and retry</button>`
+          : `<span style="color:var(--muted);font-size:.82rem;">Top up at console.anthropic.com, or add a ${otherLabel} key by re-running start.bat.</span>`
         }
+      </div>`;
+
+    messagesEl.appendChild(wrapper);
+    scrollChat();
+    setInputEnabled(true);
+
+    if (canSwitch) {
+      document.getElementById("switch-btn").addEventListener("click", () => {
+        providerSelect.value = other;
+        wrapper.remove();
+        addMessage("user", userText);
+        sendToChat(userText);
       });
     }
-
-    setInputEnabled(true);
   }
 
   async function sendToChat(userText) {
@@ -667,7 +648,9 @@
 
       if (res.status === 402) {
         const data = await res.json();
-        showLowCreditsPrompt(data.provider);
+        removeTyping();
+        history.pop();
+        showSwitchPrompt(userText, data.provider);
         return;
       }
 
