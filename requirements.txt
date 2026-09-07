@@ -1,7 +1,7 @@
-fastapi
-uvicorn[standard]
-anthropic
-requests
-beautifulsoup4
-feedparser
-python-dotenv
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+anthropic==0.34.2
+requests==2.32.3
+beautifulsoup4==4.12.3
+feedparser==6.0.11
+python-dotenv==1.0.1

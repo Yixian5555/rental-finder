@@ -11,9 +11,9 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 def build_url(filters: dict) -> str:
     params = ["format=rss"]
 
-    if filters.get("min_price"):
+    if filters.get("min_price") is not None:
         params.append(f"min_price={int(filters['min_price'])}")
-    if filters.get("max_price"):
+    if filters.get("max_price") is not None:
         params.append(f"max_price={int(filters['max_price'])}")
 
     min_beds = filters.get("min_bedrooms", 0)
@@ -60,7 +60,8 @@ def parse_price(title: str) -> int:
 def scrape(filters: dict) -> list[dict]:
     try:
         url = build_url(filters)
-        feed = feedparser.parse(url)
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        feed = feedparser.parse(resp.content)
         listings = []
 
         for entry in feed.entries[:25]:

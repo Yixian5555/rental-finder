@@ -24,9 +24,13 @@ def build_url(filters: dict) -> str:
         params.append(f"price={min_p}__{max_p}" if min_p else f"price=__{max_p}")
 
     min_beds = filters.get("min_bedrooms")
+    max_beds = filters.get("max_bedrooms")
     if min_beds is not None:
-        code = BED_CODE.get(int(min_beds), 2)
-        params.append(f"numBedrooms={code}")
+        min_code = BED_CODE.get(int(min_beds), 2)
+        max_code = BED_CODE.get(int(max_beds), min_code) if max_beds is not None else min_code
+        # Add a numBedrooms param for each bedroom count in the range
+        for code in range(min_code, max_code + 1):
+            params.append(f"numBedrooms={code}")
 
     if filters.get("furnished"):
         params.append("isFurnished=1")

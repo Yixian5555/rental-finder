@@ -15,9 +15,9 @@ def build_url(filters: dict) -> str:
     base = "https://liv.rent/rental-listings/canada/british-columbia/vancouver"
     params = []
 
-    if filters.get("min_price"):
+    if filters.get("min_price") is not None:
         params.append(f"price_min={int(filters['min_price'])}")
-    if filters.get("max_price"):
+    if filters.get("max_price") is not None:
         params.append(f"price_max={int(filters['max_price'])}")
 
     min_beds = filters.get("min_bedrooms")
@@ -91,7 +91,7 @@ def scrape(filters: dict) -> list[dict]:
                     image = first.get("url") or first.get("src") or first.get("thumb")
 
             slug = item.get("slug") or item.get("id") or ""
-            listing_url = f"https://liv.rent/rental-listings/{slug}" if slug else url
+            listing_url = f"https://liv.rent/rental-listings/canada/british-columbia/vancouver/{slug}" if slug else url
 
             loc = item.get("location") or {}
             if isinstance(loc, dict):

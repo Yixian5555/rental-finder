@@ -1,5 +1,7 @@
 import json
 import os
+import re
+from datetime import date
 from pathlib import Path
 
 from anthropic import Anthropic
@@ -7,9 +9,13 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    raise RuntimeError("ANTHROPIC_API_KEY is not set. Run start.bat to configure it.")
 
-SYSTEM = """You are a friendly rental search assistant helping someone find apartments in Vancouver, BC.
+client = Anthropic(api_key=api_key)
+
+SYSTEM_TEMPLATE = """You are a friendly rental search assistant helping someone find apartments in Vancouver, BC.
 
 Collect these preferences through natural conversation — ask 1-2 topics at a time, be warm and concise:
 1. Preferred neighborhoods/areas (Kitsilano, Downtown, Mount Pleasant, Commercial Drive, East Van, West End, Burnaby, etc.)
@@ -23,7 +29,7 @@ Collect these preferences through natural conversation — ask 1-2 topics at a t
 
 When you have at minimum budget + bedrooms + at least one area preference (or "anywhere"), append this exact block at the very END of your message:
 
-FILTERS_JSON:{"ready":true,"filters":{"min_price":0,"max_price":2500,"min_bedrooms":1,"max_bedrooms":1,"neighborhoods":["Kitsilano"],"pets":false,"furnished":false,"parking":false,"laundry_in_suite":false}}
+FILTERS_JSON:{{"ready":true,"filters":{{"min_price":0,"max_price":2500,"min_bedrooms":1,"max_bedrooms":1,"neighborhoods":["Kitsilano"],"pets":false,"furnished":false,"parking":false,"laundry_in_suite":false}}}}
 
 Rules for the JSON:
 - studio/bachelor → min_bedrooms:0, max_bedrooms:0
@@ -33,14 +39,16 @@ Rules for the JSON:
 - pets: true if they have any pet
 - If no min price given, use 0; if no max price, use 5000
 - Do NOT append FILTERS_JSON if you still need more info — keep asking
-- Today's date is 2026-09-06"""
+- Today's date is {today}"""
 
 
 def process_chat(messages: list[dict]) -> dict:
+    system = SYSTEM_TEMPLATE.format(today=date.today().isoformat())
+
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1024,
-        system=SYSTEM,
+        system=system,
         messages=messages,
     )
 
@@ -49,10 +57,11 @@ def process_chat(messages: list[dict]) -> dict:
 
     if "FILTERS_JSON:" in text:
         try:
-            json_str = text.split("FILTERS_JSON:")[1].strip()
-            data = json.loads(json_str)
-            if data.get("ready"):
-                filters = data["filters"]
+            m = re.search(r"FILTERS_JSON:\s*(\{.*\})\s*$", text, re.DOTALL)
+            if m:
+                data = json.loads(m.group(1))
+                if data.get("ready"):
+                    filters = data["filters"]
         except Exception:
             pass
         text = text.split("FILTERS_JSON:")[0].strip()

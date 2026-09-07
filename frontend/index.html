@@ -480,6 +480,21 @@
     if (enabled) input.focus();
   }
 
+  // ── String utilities ─────────────────────────────────────
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function safeUrl(u) {
+    if (!u) return "#";
+    return /^https?:\/\//i.test(u) ? u : "#";
+  }
+
   // ── Results rendering ────────────────────────────────────
   function showSpinner() {
     resultsScroll.innerHTML = `
@@ -568,20 +583,12 @@
             <div class="card-title">${escHtml(item.title || "")}</div>
             ${item.address ? `<div class="card-address">📍 ${escHtml(item.address)}</div>` : ""}
             ${item.description ? `<div class="card-desc">${escHtml(item.description)}</div>` : ""}
-            <a class="card-link" href="${escHtml(item.url || "#")}" target="_blank" rel="noopener">View Listing →</a>
+            <a class="card-link" href="${safeUrl(item.url)}" target="_blank" rel="noopener">View Listing →</a>
           </div>
         </div>`;
     }).join("");
 
     resultsScroll.innerHTML = `<div class="grid">${cards}</div>${buildOpenLinks(filters)}`;
-  }
-
-  function escHtml(str) {
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
   }
 
   // ── API calls ─────────────────────────────────────────────
@@ -610,6 +617,8 @@
       }
     } catch (err) {
       removeTyping();
+      // Remove the user message that was pushed before the failed request
+      history.pop();
       addMessage("bot", "Sorry, something went wrong. Is the backend running?");
       setInputEnabled(true);
     }
@@ -618,6 +627,7 @@
   async function triggerSearch(filters) {
     showSpinner();
     searching = true;
+    addMessage("bot", "Searching Craigslist, Kijiji, and liv.rent for you… this takes about 10–15 seconds.");
 
     try {
       const res = await fetch("/search", {
@@ -627,11 +637,12 @@
       });
       const data = await res.json();
       renderResults(data, filters);
+      addMessage("bot", "I've found the listings above! You can refine your search by telling me more (e.g. \"actually make it 2 bedrooms\" or \"add parking\").");
     } catch (err) {
       resultsScroll.innerHTML = `<div class="no-results">Search failed. Is the backend running?</div>`;
+      addMessage("bot", "Search failed. Please check that the backend is running.");
     } finally {
       searching = false;
-      addMessage("bot", "I've found the listings above! You can refine your search by telling me more (e.g. \"actually make it 2 bedrooms\" or \"add parking\").");
       setInputEnabled(true);
     }
   }
@@ -647,11 +658,14 @@
       const data = await res.json();
       removeTyping();
       addMessage("bot", data.message);
+      history.push({ role: "user", content: "__START__" });
       history.push({ role: "assistant", content: data.message });
       setInputEnabled(true);
     } catch {
       removeTyping();
       addMessage("bot", "Hi! I'll help you find rental units in Vancouver. What area(s) are you considering, and what's your budget?");
+      history.push({ role: "user", content: "__START__" });
+      history.push({ role: "assistant", content: "Hi! I'll help you find rental units in Vancouver. What area(s) are you considering, and what's your budget?" });
       setInputEnabled(true);
     }
   }

@@ -92,15 +92,34 @@ if errorlevel 1 (
   exit /b 1
 )
 
-:: Save key to .env for next time
-echo ANTHROPIC_API_KEY=!USER_INPUT!> .env
+:: Save key to .env for next time (preserve any existing vars, update or add the key)
 set ANTHROPIC_API_KEY=!USER_INPUT!
+if exist ".env" (
+  findstr /v /i "^ANTHROPIC_API_KEY=" .env > .env.tmp
+  echo ANTHROPIC_API_KEY=!USER_INPUT!>> .env.tmp
+  move /y .env.tmp .env > nul
+) else (
+  echo ANTHROPIC_API_KEY=!USER_INPUT!> .env
+)
 echo  Your key has been saved. You won't need to enter
 echo  it again next time you open the app.
 echo.
 
 :: ─── Install Python dependencies ────────────────────────
 :install_deps
+
+:: Check Python is available
+python --version > nul 2>&1
+if errorlevel 1 (
+  echo  ─────────────────────────────────────────────────────
+  echo   [ERROR] Python not found on PATH.
+  echo   Install Python 3.10+ from https://python.org
+  echo   and make sure to tick "Add Python to PATH".
+  echo  ─────────────────────────────────────────────────────
+  echo.
+  pause
+  exit /b 1
+)
 if not exist "venv" (
   echo  ─────────────────────────────────────────────────────
   echo   Setting things up for the first time...
@@ -108,10 +127,21 @@ if not exist "venv" (
   echo  ─────────────────────────────────────────────────────
   echo.
   python -m venv venv
+  if errorlevel 1 (
+    echo  [ERROR] Failed to create virtual environment.
+    echo   Check your Python installation and available disk space.
+    pause
+    exit /b 1
+  )
 )
 
 call venv\Scripts\activate.bat
-pip install -r requirements.txt -q 2>nul
+pip install -r requirements.txt -q
+if errorlevel 1 (
+  echo  [WARNING] Some packages may not have installed correctly.
+  echo   Check the output above for details.
+  echo.
+)
 
 :: ─── Start the app ───────────────────────────────────────
 cls

@@ -7,6 +7,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import parser as _parser
+from scrapers.craigslist import scrape as cl_scrape
+from scrapers.kijiji import scrape as kj_scrape
+from scrapers.livrent import scrape as lr_scrape
+
 app = FastAPI()
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -32,17 +37,12 @@ def serve_frontend():
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    from parser import process_chat
-    result = await asyncio.to_thread(process_chat, [m.model_dump() for m in req.messages])
+    result = await asyncio.to_thread(_parser.process_chat, [m.model_dump() for m in req.messages])
     return result
 
 
 @app.post("/search")
 async def search(req: SearchRequest):
-    from scrapers.craigslist import scrape as cl_scrape
-    from scrapers.kijiji import scrape as kj_scrape
-    from scrapers.livrent import scrape as lr_scrape
-
     filters = req.filters
 
     results = await asyncio.gather(
