@@ -112,5 +112,6 @@ def scrape(filters: dict) -> list[dict]:
 
         return listings
     except Exception as e:
-        print(f"[liv.rent] error: {e}")
+        if "404" not in str(e):
+            print(f"[liv.rent] error: {e}")
         return []

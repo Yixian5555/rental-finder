@@ -10,7 +10,6 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-# Kijiji bedroom filter codes
 BED_CODE = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
 
 
@@ -28,7 +27,6 @@ def build_url(filters: dict) -> str:
     if min_beds is not None:
         min_code = BED_CODE.get(int(min_beds), 2)
         max_code = BED_CODE.get(int(max_beds), min_code) if max_beds is not None else min_code
-        # Add a numBedrooms param for each bedroom count in the range
         for code in range(min_code, max_code + 1):
             params.append(f"numBedrooms={code}")
 
@@ -45,6 +43,21 @@ def build_url(filters: dict) -> str:
     return base + ("?" + "&".join(params) if params else "")
 
 
+def _attr(attributes_list: list, name: str) -> str:
+    for a in attributes_list:
+        if a.get("canonicalName") == name:
+            vals = a.get("canonicalValues", [])
+            return vals[0] if vals else ""
+    return ""
+
+
+def _attr_int(attributes_list: list, name: str) -> int:
+    try:
+        return int(_attr(attributes_list, name) or 0)
+    except (ValueError, TypeError):
+        return 0
+
+
 def scrape(filters: dict) -> list[dict]:
     try:
         url = build_url(filters)
@@ -57,57 +70,58 @@ def scrape(filters: dict) -> list[dict]:
             return []
 
         data = json.loads(script.string)
-        page_props = data.get("props", {}).get("pageProps", {})
-
-        raw = []
-        for key in ("listings", "ads", "searchResults"):
-            candidate = page_props.get(key)
-            if isinstance(candidate, list) and candidate:
-                raw = candidate
-                break
+        apollo = data.get("props", {}).get("pageProps", {}).get("__APOLLO_STATE__", {})
+        if not apollo:
+            return []
 
         listings = []
-        for item in raw[:25]:
-            # Price
-            price_raw = item.get("price", {})
-            if isinstance(price_raw, dict):
-                price = int(price_raw.get("amount", 0)) // 100
-            elif isinstance(price_raw, (int, float)):
-                price = int(price_raw)
-            else:
+        for key, item in apollo.items():
+            if not key.startswith("RealEstateListing:"):
+                continue
+
+            # Price: stored in cents (e.g., 295000 = $2,950); may be "Not Available"
+            price_obj = item.get("price", {})
+            raw_amount = price_obj.get("amount", 0) if isinstance(price_obj, dict) else 0
+            try:
+                price = int(raw_amount) // 100 if raw_amount else 0
+            except (TypeError, ValueError):
                 price = 0
 
-            # Image
-            images = item.get("images") or item.get("thumbnails") or []
+            # Image: upgrade thumbnail to larger size
+            image_urls = item.get("imageUrls", [])
             image = None
-            if isinstance(images, list) and images:
-                first = images[0]
-                image = first if isinstance(first, str) else first.get("src") or first.get("url")
+            if image_urls:
+                image = image_urls[0].replace("kijijica-200-jpg", "kijijica-640-jpg")
 
-            # URL
-            ad_id = item.get("id") or item.get("adId", "")
-            slug = item.get("seoUrl") or item.get("url") or ""
-            if slug and not slug.startswith("http"):
-                listing_url = f"https://www.kijiji.ca{slug}"
-            elif slug:
-                listing_url = slug
-            else:
-                listing_url = f"https://www.kijiji.ca/v-apartments-condos/city-of-vancouver/a/{ad_id}"
+            # Location
+            loc = item.get("location", {})
+            address = ""
+            if isinstance(loc, dict):
+                address = loc.get("address") or loc.get("name") or ""
 
-            # Address
-            loc = item.get("location") or {}
-            address = loc.get("name") or loc.get("city") or "" if isinstance(loc, dict) else str(loc)
+            # Attributes
+            attrs_all = []
+            attrs_obj = item.get("attributes", {})
+            if isinstance(attrs_obj, dict):
+                attrs_all = attrs_obj.get("all", [])
 
             listings.append({
                 "title": item.get("title", ""),
                 "price": price,
-                "url": listing_url,
+                "url": item.get("url", ""),
                 "image": image,
                 "address": address,
                 "source": "Kijiji",
                 "description": (item.get("description") or "")[:250],
                 "posted": item.get("activationDate") or item.get("sortingDate") or "",
+                "bedrooms": _attr(attrs_all, "numberbedrooms"),
+                "pets": _attr(attrs_all, "petsallowed") == "1",
+                "parking": _attr_int(attrs_all, "numberparkingspots") > 0,
+                "laundry_in_suite": _attr(attrs_all, "laundryinunit") == "1",
             })
+
+            if len(listings) >= 25:
+                break
 
         return listings
     except Exception as e:
