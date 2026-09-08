@@ -12,7 +12,7 @@ BED_PARAM = {0: "bachelor", 1: "one_bedroom", 2: "two_bedrooms", 3: "three_plus_
 
 
 def build_url(filters: dict) -> str:
-    base = "https://liv.rent/rental-listings/canada/british-columbia/vancouver"
+    base = "https://liv.rent/rental-listings/city/vancouver"
     params = []
 
     if filters.get("min_price") is not None:

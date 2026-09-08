@@ -1,89 +1,84 @@
 import re
 from urllib.parse import quote_plus
 
-import feedparser
 import requests
 from bs4 import BeautifulSoup
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-CA,en;q=0.9",
+}
 
 
 def build_url(filters: dict) -> str:
-    params = ["format=rss"]
+    params = []
 
-    if filters.get("min_price") is not None:
+    if filters.get("min_price"):
         params.append(f"min_price={int(filters['min_price'])}")
-    if filters.get("max_price") is not None:
+    if filters.get("max_price"):
         params.append(f"max_price={int(filters['max_price'])}")
 
-    min_beds = filters.get("min_bedrooms", 0)
-    if min_beds and min_beds > 0:
-        params.append(f"min_bedrooms={min_beds}")
-
+    # Craigslist bedroom values: 0=studio, 1=1BR, 2=2BR, 3=3BR, 4=4BR+
+    min_beds = filters.get("min_bedrooms")
     max_beds = filters.get("max_bedrooms")
-    if max_beds is not None and max_beds >= 0:
-        params.append(f"max_bedrooms={max_beds}")
+    if min_beds is not None:
+        params.append(f"min_bedrooms={int(min_beds)}")
+    if max_beds is not None:
+        params.append(f"max_bedrooms={int(max_beds)}")
 
     if filters.get("pets"):
         params.append("pets_cat=1&pets_dog=1")
-
     if filters.get("furnished"):
         params.append("is_furnished=1")
 
     neighborhoods = filters.get("neighborhoods", [])
     if neighborhoods:
-        query = " ".join(neighborhoods)
-        params.append(f"query={quote_plus(query)}")
+        params.append(f"query={quote_plus(' '.join(neighborhoods))}")
 
     return "https://vancouver.craigslist.org/search/apa?" + "&".join(params)
 
 
-def extract_image(html: str) -> str | None:
-    try:
-        soup = BeautifulSoup(html, "html.parser")
-        img = soup.find("img")
-        if img:
-            src = img.get("src", "")
-            return src.replace("_300x300", "_600x450").replace("_50x50c", "_600x450")
-    except Exception:
-        pass
-    return None
-
-
-def parse_price(title: str) -> int:
-    match = re.search(r"\$(\d[\d,]*)", title)
-    if match:
-        return int(match.group(1).replace(",", ""))
-    return 0
+def _parse_price(text: str) -> int:
+    m = re.search(r"\$(\d[\d,]*)", text)
+    return int(m.group(1).replace(",", "")) if m else 0
 
 
 def scrape(filters: dict) -> list[dict]:
     try:
         url = build_url(filters)
         resp = requests.get(url, headers=HEADERS, timeout=15)
-        feed = feedparser.parse(resp.content)
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        items = soup.select("li.cl-static-search-result")
+
         listings = []
+        for item in items[:25]:
+            a = item.find("a")
+            if not a:
+                continue
 
-        for entry in feed.entries[:25]:
-            title = entry.get("title", "")
-            image = extract_image(entry.get("summary", ""))
-            description = BeautifulSoup(entry.get("summary", ""), "html.parser").get_text()[:250]
+            title = item.get("title") or item.select_one(".title")
+            title = title.get_text(strip=True) if hasattr(title, "get_text") else str(title)
 
-            # Extract address from title "(address)" pattern
-            address = ""
-            addr_match = re.search(r"\(([^)]+)\)\s*$", title)
-            if addr_match:
-                address = addr_match.group(1)
+            price_el = item.select_one(".price")
+            price = _parse_price(price_el.get_text()) if price_el else 0
+
+            loc_el = item.select_one(".location")
+            address = loc_el.get_text(strip=True) if loc_el else ""
+
+            listing_url = a.get("href", "")
 
             listings.append({
                 "title": title,
-                "url": entry.get("link", ""),
-                "price": parse_price(title),
-                "image": image,
+                "price": price,
+                "url": listing_url,
+                "image": None,
                 "address": address,
                 "source": "Craigslist",
-                "description": description.strip(),
-                "posted": entry.get("published", ""),
+                "description": "",
+                "posted": "",
             })
 
         return listings

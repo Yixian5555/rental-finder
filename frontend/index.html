@@ -366,6 +366,40 @@
     }
     .link-btn:hover { border-color: var(--accent); background: #eff6ff; }
 
+    /* Source filter bar */
+    .source-filter-bar {
+      display: none;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .filter-label {
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+      margin-right: 2px;
+    }
+
+    .source-pill {
+      padding: 4px 12px;
+      border-radius: 99px;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid var(--border);
+      background: #f9fafb;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .source-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .source-pill:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
     /* No results */
     .no-results {
       text-align: center;
@@ -452,6 +486,7 @@
       <h2>Listings</h2>
       <span id="count-badge"></span>
     </div>
+    <div class="source-filter-bar" id="source-filter-bar"></div>
     <div class="results-scroll" id="results-scroll">
       <div class="placeholder" id="placeholder">
         <span class="big-icon">🔍</span>
@@ -469,9 +504,12 @@
   const countBadge      = document.getElementById("count-badge");
   const providerSelect  = document.getElementById("provider-select");
 
-  let history = [];   // [{role, content}]
+  let history = [];
   let searching = false;
   let currentFilters = null;
+  let allListings = [];
+  let activeSources = new Set();
+  let currentOpenLinksHtml = "";
 
   // ── Helpers ──────────────────────────────────────────────
   function scrollChat() {
@@ -543,10 +581,11 @@
 
   // ── Results rendering ────────────────────────────────────
   function showSpinner() {
+    document.getElementById("source-filter-bar").style.display = "none";
     resultsScroll.innerHTML = `
       <div class="spinner-wrap">
         <div class="spinner"></div>
-        <span>Searching Craigslist, Kijiji, and liv.rent…</span>
+        <span>Searching Craigslist and Kijiji…</span>
       </div>`;
   }
 
@@ -563,7 +602,6 @@
 
   function buildOpenLinks(filters) {
     const max = filters.max_price || "";
-    const min = filters.min_price || "";
     const beds = filters.min_bedrooms || 1;
     const hoods = (filters.neighborhoods || []).join(" ");
 
@@ -574,7 +612,7 @@
     const kjKw = hoods ? `&keywords=${encodeURIComponent(hoods)}` : "";
     const kjUrl = `https://www.kijiji.ca/b-apartments-condos/city-of-vancouver/c37l1700287?${kjPrice}${kjKw}`;
 
-    const lrUrl = `https://liv.rent/rental-listings/canada/british-columbia/vancouver?price_max=${max}`;
+    const lrUrl = `https://liv.rent/rental-listings/city/vancouver?price_max=${max}`;
     const zmUrl = `https://www.zumper.com/apartments-for-rent/vancouver-bc`;
     const pbUrl = `https://www.padmapper.com/apartments/vancouver-bc`;
     const fbUrl = `https://www.facebook.com/marketplace/category/propertyrentals?location=Vancouver,%20British%20Columbia`;
@@ -582,7 +620,7 @@
     return `
       <div class="open-links">
         <h3>Also search manually</h3>
-        <p>These sites require login or were hard to scrape. Open them with your filters pre-applied:</p>
+        <p>These sites require login or JavaScript to scrape. Open them with your filters pre-applied:</p>
         <div class="link-btns">
           <a class="link-btn" href="${clUrl}" target="_blank">🔎 Craigslist</a>
           <a class="link-btn" href="${kjUrl}" target="_blank">🔎 Kijiji</a>
@@ -594,47 +632,91 @@
       </div>`;
   }
 
+  function buildCard(item) {
+    const imgHtml = item.image
+      ? `<img src="${escHtml(item.image)}" alt="listing photo" onerror="this.parentElement.innerHTML='🏢'" loading="lazy" />`
+      : "🏢";
+    const src = item.source || "Other";
+    const cls = sourceClass(src);
+    return `
+      <div class="card">
+        <div class="card-img">${imgHtml}</div>
+        <div class="card-body">
+          <div class="card-top">
+            <span class="card-price">${formatPrice(item.price)}</span>
+            <span class="source-badge ${cls}">${escHtml(src)}</span>
+          </div>
+          <div class="card-title">${escHtml(item.title || "")}</div>
+          ${item.address ? `<div class="card-address">📍 ${escHtml(item.address)}</div>` : ""}
+          ${item.description ? `<div class="card-desc">${escHtml(item.description)}</div>` : ""}
+          <a class="card-link" href="${safeUrl(item.url)}" target="_blank" rel="noopener">View Listing →</a>
+        </div>
+      </div>`;
+  }
+
+  function renderSourceFilterBar(sources) {
+    const bar = document.getElementById("source-filter-bar");
+    bar.innerHTML = "";
+    if (sources.size <= 1) { bar.style.display = "none"; return; }
+    bar.style.display = "flex";
+    const label = document.createElement("span");
+    label.className = "filter-label";
+    label.textContent = "Source:";
+    bar.appendChild(label);
+    for (const src of [...sources].sort()) {
+      const pill = document.createElement("button");
+      pill.className = "source-pill active";
+      pill.dataset.source = src;
+      pill.textContent = src;
+      pill.addEventListener("click", () => toggleSource(src));
+      bar.appendChild(pill);
+    }
+  }
+
+  function toggleSource(src) {
+    if (activeSources.has(src)) {
+      if (activeSources.size > 1) activeSources.delete(src);
+    } else {
+      activeSources.add(src);
+    }
+    document.querySelectorAll(".source-pill").forEach(p => {
+      p.classList.toggle("active", activeSources.has(p.dataset.source));
+    });
+    renderFilteredCards();
+  }
+
+  function renderFilteredCards() {
+    const filtered = allListings.filter(l => activeSources.has(l.source || "Other"));
+    countBadge.textContent = `${filtered.length} found`;
+    countBadge.style.display = filtered.length > 0 ? "inline-block" : "none";
+    if (filtered.length === 0) {
+      resultsScroll.innerHTML = `<div class="no-results"><p>No listings from selected sources.</p></div>${currentOpenLinksHtml}`;
+      return;
+    }
+    resultsScroll.innerHTML = `<div class="grid">${filtered.map(buildCard).join("")}</div>${currentOpenLinksHtml}`;
+  }
+
   function renderResults(data, filters) {
-    const { listings, count } = data;
+    const { listings } = data;
+    allListings = listings || [];
+    currentOpenLinksHtml = buildOpenLinks(filters);
 
-    countBadge.textContent = `${count} found`;
-    countBadge.style.display = count > 0 ? "inline-block" : "none";
-
-    if (!listings || listings.length === 0) {
+    if (allListings.length === 0) {
+      document.getElementById("source-filter-bar").style.display = "none";
+      countBadge.style.display = "none";
       resultsScroll.innerHTML = `
         <div class="no-results">
           <p>No listings found matching your criteria.</p>
           <p style="margin-top:8px">Try broadening your budget or area.</p>
         </div>
-        ${buildOpenLinks(filters)}`;
+        ${currentOpenLinksHtml}`;
       return;
     }
 
-    const cards = listings.map(item => {
-      const imgHtml = item.image
-        ? `<img src="${escHtml(item.image)}" alt="listing photo" onerror="this.parentElement.innerHTML='🏢'" loading="lazy" />`
-        : "🏢";
-
-      const src = item.source || "Other";
-      const cls = sourceClass(src);
-
-      return `
-        <div class="card">
-          <div class="card-img">${imgHtml}</div>
-          <div class="card-body">
-            <div class="card-top">
-              <span class="card-price">${formatPrice(item.price)}</span>
-              <span class="source-badge ${cls}">${escHtml(src)}</span>
-            </div>
-            <div class="card-title">${escHtml(item.title || "")}</div>
-            ${item.address ? `<div class="card-address">📍 ${escHtml(item.address)}</div>` : ""}
-            ${item.description ? `<div class="card-desc">${escHtml(item.description)}</div>` : ""}
-            <a class="card-link" href="${safeUrl(item.url)}" target="_blank" rel="noopener">View Listing →</a>
-          </div>
-        </div>`;
-    }).join("");
-
-    resultsScroll.innerHTML = `<div class="grid">${cards}</div>${buildOpenLinks(filters)}`;
+    const sources = new Set(allListings.map(l => l.source || "Other"));
+    activeSources = new Set(sources);
+    renderSourceFilterBar(sources);
+    renderFilteredCards();
   }
 
   // ── API calls ─────────────────────────────────────────────
@@ -744,7 +826,7 @@
   async function triggerSearch(filters) {
     showSpinner();
     searching = true;
-    addMessage("bot", "Searching Craigslist, Kijiji, and liv.rent for you… this takes about 10–15 seconds.");
+    addMessage("bot", "Searching Craigslist and Kijiji for you… this takes about 10–15 seconds.");
 
     try {
       const res = await fetch("/search", {
